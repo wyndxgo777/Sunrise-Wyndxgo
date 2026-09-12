@@ -25,6 +25,7 @@
 #include "../hooks/cine_probe/cine_probe.h"
 #include "../hooks/config_getter/config_getter_lifecycle.h"
 #include "../hooks/cursor/runtime.h"
+#include "../hooks/godmode/godmode.h"
 #include "../hooks/graphics/graphics_hook_lifecycle.h"
 #include "../hooks/hitch_probe/hitch_probe.h"
 #include "../hooks/inactivity/inactivity_override.h"
@@ -36,6 +37,7 @@
 #include "../hooks/network/presence_publication.h"
 #include "../hooks/network/reliable_request_admission.h"
 #include "../hooks/network/runtime.h"
+#include "../hooks/no_turnback/no_turnback.h"
 #include "../hooks/noclip/runtime.h"
 #include "../hooks/package_trust/package_trust_bypass.h"
 #include "../hooks/polled_input/runtime.h"
@@ -259,6 +261,9 @@ void clear_game_targets() noexcept {
     (void)hooks::infinite_ammo::install();
     // Resolves the activity config getter here; the hold itself runs on the frame tick.
     (void)hooks::inactivity::install();
+    // These player patches resolve their own signatures and apply the saved player settings.
+    (void)hooks::no_turnback::install();
+    (void)hooks::godmode::install();
     (void)hooks::queuez::install();
     // The bitmap reference guard puts the none sentinel in place of a reference outside tag
     // space. Without it the widget's stored-reference reader faults.
