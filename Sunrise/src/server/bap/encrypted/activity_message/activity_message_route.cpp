@@ -27,6 +27,7 @@
 #include "../push/activity/activity_arrival.h"
 #include "../push/activity/internal.h"
 #include "activity_message_route_internal.h"
+#include "festival_pickups.h"
 #include "membership/activity_membership_route.h"
 #include "membership/activity_reservations_route.h"
 #include "middleware/bap/activity_message/activity_entity_slot_request_parser.h"
@@ -449,6 +450,15 @@ bool process(const ActivityClientBinding& binding,
         static_cast<void>(record(request, store::Verdict::unowned, 0, nullptr, 0));
         return true;
     }
+
+    // Festival of the Lost placed-loot incidents are validated and converted into Candy
+    // through Cow's existing world-reward queue. The normal framing path still records/consumes
+    // the client message so its pending activity-message ring is not left jammed.
+    if (request.messageType == service::incident::kMessageType) {
+        festival_pickups::receive(binding, request);
+        return frame_only(binding, rosterDecode, adapter, request);
+    }
+
     bool prepared = false;
     switch (adapter) {
     case IngressAdapter::connectivityFailure: {

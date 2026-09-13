@@ -543,21 +543,23 @@ void* local_player_component() noexcept {
 
 /** Reports the complete datum handle of the object the local player controls. */
 std::uint32_t local_player_handle() noexcept {
-    if (g_controlledHandle == nullptr) {
+    const auto getter = g_controlledHandle.load(std::memory_order_acquire);
+    if (getter == nullptr) {
         return kInvalidHandle;
     }
 
     std::uint32_t controlled = kInvalidHandle;
 
-    g_controlledHandle(&controlled);
+    getter(&controlled);
 
     return controlled;
 }
 
 /** @return True when the local player drives the candidate component. */
 bool owns_local_player(void* component) noexcept {
+    const auto getter = g_controlledHandle.load(std::memory_order_acquire);
 
-    return component != nullptr && g_controlledHandle != nullptr
+    return component != nullptr && getter != nullptr
            && owns_player(static_cast<std::byte*>(component));
 }
 
