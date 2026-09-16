@@ -8,6 +8,7 @@
 
 #include <array>
 #include <atomic>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
@@ -642,6 +643,77 @@ bool current_controlled_handle(std::uint32_t& handle) noexcept {
     }
     getter(&handle);
     return handle != kInvalidHandle;
+}
+
+/** Reports whether one candidate object is the one the local player controls. */
+bool is_controlled_object(const void* object) noexcept {
+    if (object == nullptr) {
+        return false;
+    }
+
+    std::uint32_t controlled = kInvalidHandle;
+    if (!current_controlled_handle(controlled)) {
+        return false;
+    }
+
+    std::uint16_t candidate = 0;
+
+    return read_at(static_cast<const std::byte*>(object) + kPhysicsComponentObjectHandle,
+                   candidate)
+           && (controlled & kHandleIndexMask)
+                  == (static_cast<std::uint32_t>(candidate) & kHandleIndexMask);
+}
+
+/** Reads the local player's current world position. */
+bool current_position(std::array<float, 3>& output) noexcept {
+    output = {};
+
+    std::byte* const physics = g_playerComponent.load(std::memory_order_acquire);
+    if (physics == nullptr || g_controlledHandle == nullptr || !owns_player(physics)) {
+        return false;
+    }
+
+    std::byte* const body = body_of(physics);
+
+    return body != nullptr && read_at(body + kBodyPositionX, output);
+}
+
+/** Reads the local player's current position and camera forward vector together. */
+bool current_camera_pose(std::array<float, 3>& position,
+                         std::array<float, 3>& forward) noexcept {
+    position = {};
+    forward = g_forward;
+
+    if (g_controlledHandle == nullptr) {
+        return false;
+    }
+
+    std::uint32_t controlled = kInvalidHandle;
+    if (!current_controlled_handle(controlled)) {
+        return false;
+    }led)) {
+        return false;
+    }
+
+    std::byte* const physics = g_playerComponent.load(std::memory_order_acquire);
+    if (physics != nullptr && owns_player(physics)) {
+        std::byte* const body = body_of(physics);
+        if (body != nullptr) {
+            read_at(body + kBodyPositionX, position);
+        }
+    }
+
+    if (!g_forwardValid.load(std::memory_order_acquire)) {
+        return false;
+    }
+
+    for (std::size_t lane = 0; lane < kVectorLanes; ++lane) {
+        if (!std::isfinite(position[lane]) || !std::isfinite(forward[lane])) {
+            return false;
+        }
+    }
+
+    return true;
 }
 
 } // namespace sunrise::client::hooks::teleport

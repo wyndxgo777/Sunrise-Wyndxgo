@@ -39,6 +39,29 @@ void publish_targets(ControlledHandle controlled, CameraSingleton singleton) noe
 void clear_targets() noexcept;
 
 /**
+ * Reports whether one candidate object is the one the local player controls.
+ * @param object Candidate object base pointer. Null is never the local player.
+ * @return True when the object's handle matches the controlled-object handle.
+ */
+[[nodiscard]] bool is_controlled_object(const void* object) noexcept;
+
+/**
+ * Reads the local player's current world position.
+ * @param output Receives three world-space lanes when the player and body were found.
+ * @return True when the player's physics component and body were found and read.
+ */
+[[nodiscard]] bool current_position(std::array<float, 3>& output) noexcept;
+
+/**
+ * Reads the local player's current position and camera forward vector together.
+ * @param position Receives three world-space lanes of the player or camera pose.
+ * @param forward Receives three lanes of the published camera forward vector.
+ * @return True when a finite position and forward vector were available.
+ */
+[[nodiscard]] bool current_camera_pose(std::array<float, 3>& position,
+                                       std::array<float, 3>& forward) noexcept;
+
+/**
  * Attaches the camera and physics hooks that carry the teleport.
  * @return True when all three targets were found and both detours attached.
  */
