@@ -1,3 +1,24 @@
+# DISCLAIMER: THIS IS A MERGE OF A BUNCH OF FORKS AND PRS I FOUND HERES THE LIST SO FAR:
+Pull requests: 
+PR 115
+PR 94
+
+FORKS:
+
+Coop fork:
+https://github.com/Techno453/Sunrise-coop-fork
+
+Breshi's sandbox:
+https://github.com/Breshi123/Sunrise-Sandbox
+
+ReGlitched:
+https://github.com/ReGlitched/Sunrise
+
+Drkarisma's Cowisma fork:
+https://github.com/DoctorKarisma/Sunrise-AIO-Cowisma
+
+shoutout to all of these people for 
+
 # Sunrise
 
 Destiny 2 Offline Exploration Mod
