@@ -302,11 +302,19 @@ bool collect_entity(void*, const package_reader::ClassEntry& entry) noexcept {
     const bool namedProjectile = std::any_of(names.begin(), names.end(), [](const auto& name) {
         return projectile_name({name.text.data(), name.length});
     });
-    Column* const column = objectType == ObjectType::Projectile || namedProjectile
-                               ? &g_projectile
-                           : objectType == ObjectType::ItemAmmo || objectType == ObjectType::ItemLoot
-                               ? &g_loot
-                               : &g_main;
+    // Every enemy (Biped and Creature) always lands in the main spawner. This check runs before
+    // the name-based projectile heuristic, so an enemy whose display name happens to contain a
+    // projectile marker (rocket, missile, ...) is never pulled out of the main list.
+    Column* column = &g_main;
+    if (objectType == ObjectType::Biped || objectType == ObjectType::Creature) {
+        column = &g_main;
+    } else if (objectType == ObjectType::Projectile || namedProjectile) {
+        // Native projectiles plus any entity named like one spawn from the projectile list.
+        column = &g_projectile;
+    } else if (objectType == ObjectType::ItemAmmo || objectType == ObjectType::ItemLoot) {
+        // Ammo bricks and world loot pickups are the droppable loot list.
+        column = &g_loot;
+    }
     if (names.empty()) {
         add_candidate(*column, entry.tag, type, entry.packageFamily, nullptr);
     } else {
