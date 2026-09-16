@@ -5,6 +5,7 @@
 #include "../bounties/bounty_catalog.h"
 #include "../collectibles/collectible_catalog.h"
 #include "../constants/investment_constant_catalog.h"
+#include "../entity_names/entity_name_catalog.h"
 #include "../hash_names/hash_name_catalog.h"
 #include "../inventory/buckets/inventory_bucket_catalog.h"
 #include "../items/catalysts/exotic_catalyst_catalog.h"
@@ -70,6 +71,12 @@ void rollback_ability_publication() noexcept {
 void rollback_name_catalog_publication() noexcept {
     runtime::name_catalog::clear();
     hash_names::clear();
+}
+
+/** Drops the entity-name ready flag, then removes the failed entity-name candidate. */
+void rollback_entity_name_catalog_publication() noexcept {
+    runtime::entity_name_catalog::clear();
+    entity_names::clear();
 }
 
 /** Drops the spawn-set ready flag, then removes the failed spawn-set candidate. */
@@ -183,6 +190,41 @@ bool publish_hash_names(std::span<const hash_names::Name> names) noexcept {
 bool find_hash_name(std::uint32_t hash, hash_names::Name& name) noexcept {
     name = {};
     return hash_names_ready() && hash_names::find(hash, name);
+}
+
+/** @return True when the complete entity-name table is published. */
+bool entity_names_ready() noexcept {
+    return runtime::entity_name_catalog::ready();
+}
+
+/** Publishes the resolved entity names in one step. */
+bool publish_entity_names(std::span<const entity_names::Name> names) noexcept {
+    runtime::persistence::Transaction transaction;
+    if (!transaction.active()) {
+        return false;
+    }
+    if (!entity_names::replace(names)) {
+        return transaction.finish(false, rollback_entity_name_catalog_publication);
+    }
+    runtime::entity_name_catalog::publish();
+    return transaction.finish(true, rollback_entity_name_catalog_publication);
+}
+
+/** Finds the first resolved name for an entity tag. */
+bool find_entity_name(std::uint32_t tag, entity_names::Name& name) noexcept {
+    name = {};
+    return entity_names_ready() && entity_names::find(tag, name);
+}
+
+/** @return Number of cached entity-name aliases. */
+std::size_t entity_name_count() noexcept {
+    return entity_names_ready() ? entity_names::count() : 0;
+}
+
+/** Copies the complete entity-name alias table in tag/name order. */
+bool snapshot_entity_names(std::span<entity_names::Name> output, std::size_t& count) noexcept {
+    count = 0;
+    return entity_names_ready() && entity_names::snapshot(output, count);
 }
 
 /** @return True when a complete spawn-set catalog, empty or not, is published. */
@@ -379,6 +421,7 @@ void clear_catalogs() noexcept {
     scenarios::clear();
     rollback_spawn_catalog_publication();
     rollback_name_catalog_publication();
+    rollback_entity_name_catalog_publication();
     vendors::clear();
     constants::clear();
 }

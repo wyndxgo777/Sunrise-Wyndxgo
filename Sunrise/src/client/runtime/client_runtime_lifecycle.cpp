@@ -38,8 +38,10 @@
 #include "../hooks/stall_probe/stall_probe.h"
 #include "../hooks/teleport/runtime.h"
 #include "../hooks/world_objects/world_object_registry.h"
+#include "../hooks/spawn/spawn_runtime.h"
 #include "../movement/movement_settings_store.h"
 #include "../player/player_settings_store.h"
+#include "../spawn/spawn_keybind_store.h"
 #include "../targets/game.h"
 #include "../targets/steam_targets.h"
 #include "../ui/activity/authored_placement_marker.h"
@@ -55,6 +57,7 @@ bool initialize(void* module) noexcept {
         module, {core::settings::get().activitySdkGeneration.luaDeclarations});
     // Loaded before the pages register, so each page draws saved values on its first frame.
     movement::initialize(module);
+    spawn::initialize(module);
     player::initialize(module);
     ui::activity::authored_placement_marker::initialize(module);
     return ui::runtime::initialize();
@@ -222,6 +225,7 @@ bool shutdown() noexcept {
     content::activity::scriptables::reset();
     server::bap::unregister_client_investment_consumers();
     content::investment::worker::reset();
+    hooks::spawn::uninstall();
     (void)hooks::async_io::uninstall();
     targets::steam::clear();
     if (runtime::g_platformModule != nullptr) {
@@ -244,6 +248,7 @@ bool shutdown() noexcept {
     // The reverse of the order the stores initialize in.
     ui::activity::authored_placement_marker::shutdown();
     player::shutdown();
+    spawn::shutdown();
     movement::shutdown();
     core::log::write(core::log::Channel::client, core::log::Level::info, "ev=shutdown result=ok");
     ReleaseSRWLockExclusive(&runtime::g_lock);

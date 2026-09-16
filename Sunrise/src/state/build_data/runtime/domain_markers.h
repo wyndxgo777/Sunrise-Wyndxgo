@@ -72,6 +72,20 @@ void publish() noexcept;
 
 } // namespace spawn_catalog
 
+/** Entity-name alias table publish marker. */
+namespace entity_name_catalog {
+
+/** Clears the marker. */
+void clear() noexcept;
+
+/** Marks the domain complete. An empty domain counts as complete. */
+void publish() noexcept;
+
+/** @return True once a complete domain has been published. */
+[[nodiscard]] bool ready() noexcept;
+
+} // namespace entity_name_catalog
+
 /** Named catalog publish marker. */
 namespace named {
 

@@ -257,6 +257,8 @@
     <ClCompile Include="src\client\ui\runtime\client_ui_module_runtime.cpp" />
     <ClCompile Include="src\client\ui\movement\movement_panel.cpp" />
     <ClCompile Include="src\client\movement\movement_settings_store.cpp" />
+    <ClCompile Include="src\client\spawn\spawn_keybind_store.cpp" />
+    <ClCompile Include="src\client\hooks\spawn\spawn_runtime.cpp" />
     <ClCompile Include="src\client\hooks\inactivity\inactivity_override.cpp" />
     <ClCompile Include="src\client\ui\player\player_panel.cpp" />
     <ClCompile Include="src\client\player\player_position.cpp" />
@@ -723,6 +725,7 @@
     <ClCompile Include="src\state\build_data\scenarios\scenario_catalog.cpp" />
     <ClCompile Include="src\state\build_data\spawn_sets\spawn_set_catalog.cpp" />
     <ClCompile Include="src\state\build_data\hash_names\hash_name_catalog.cpp" />
+    <ClCompile Include="src\state\build_data\entity_names\entity_name_catalog.cpp" />
     <ClCompile Include="src\state\activity\forced\activity_forced_destination.cpp" />
     <ClCompile Include="src\state\build_data\runtime\build_data_roster_runtime.cpp" />
     <ClCompile Include="src\client\content\scenarios\scenario_build.cpp" />
@@ -730,6 +733,8 @@
     <ClCompile Include="src\client\content\spawn_sets\spawn_set_build.cpp" />
     <ClCompile Include="src\client\content\hash_names\hash_name_build.cpp" />
     <ClCompile Include="src\client\content\hash_names\hash_name_matcher.cpp" />
+    <ClCompile Include="src\client\content\entity_names\entity_name_build.cpp" />
+    <ClCompile Include="src\client\content\entity_names\localized_aliases.cpp" />
     <ClCompile Include="src\client\content\spawn_sets\spawn_set_catalog_builder.cpp" />
     <ClCompile Include="src\client\content\scenarios\scenario_roster_build.cpp" />
     <ClCompile Include="src\client\content\scenarios\scenario_roster_groups.cpp" />
@@ -922,6 +927,7 @@
     <ClCompile Include="src\server\activity\host_runtime_mission_inputs.cpp" />
     <ClCompile Include="src\server\bap\encrypted\push\activity\activity_incident_push.cpp" />
     <ClCompile Include="src\server\ui\runtime\server_ui_module_runtime.cpp" />
+    <ClCompile Include="src\server\ui\spawn\spawn_panel.cpp" />
     <ClCompile Include="src\server\ui\tower_events\tower_events_panel.cpp" />
     <ClCompile Include="src\server\ui\activity_override\activity_override_lists.cpp" />
     <ClCompile Include="src\server\ui\activity_override\activity_override_panel.cpp" />
@@ -1411,6 +1417,8 @@
     <ClInclude Include="src\core\ui\layout\credits\sunrise_credits_badge.h" />
     <ClInclude Include="src\client\runtime\runtime.h" />
     <ClInclude Include="src\client\movement\movement_settings_store.h" />
+    <ClInclude Include="src\client\spawn\spawn_keybind_store.h" />
+    <ClInclude Include="src\client\hooks\spawn\spawn_runtime.h" />
     <ClInclude Include="src\client\hooks\async_io\async_io_lifetime_guard.h" />
     <ClInclude Include="src\client\hooks\inactivity\inactivity_override.h" />
     <ClInclude Include="src\client\ui\player\player_panel.h" />
@@ -1452,6 +1460,8 @@
     <ClInclude Include="src\client\content\spawn_sets\spawn_set_build.h" />
     <ClInclude Include="src\client\content\hash_names\hash_name_build.h" />
     <ClInclude Include="src\client\content\hash_names\hash_name_matcher.h" />
+    <ClInclude Include="src\client\content\entity_names\entity_name_build.h" />
+    <ClInclude Include="src\client\content\entity_names\localized_aliases.h" />
     <ClInclude Include="src\client\content\spawn_sets\spawn_set_catalog_builder.h" />
     <ClInclude Include="src\client\content\investment\layout.h" />
     <ClInclude Include="src\client\content\investment\internal.h" />
@@ -1602,6 +1612,7 @@
     <ClInclude Include="src\core\settings\rule_text.h" />
     <ClInclude Include="src\client\hooks\network\investment\investment_refetch.h" />
     <ClInclude Include="src\server\ui\tower_events\tower_events_panel.h" />
+    <ClInclude Include="src\server\ui\spawn\spawn_panel.h" />
     <ClInclude Include="src\server\ui\activity_override\activity_override_lists.h" />
     <ClInclude Include="src\server\ui\activity_override\activity_override_panel.h" />
     <ClInclude Include="src\state\activity\events\definition.h" />
@@ -1641,6 +1652,8 @@
     <ClInclude Include="src\state\build_data\spawn_sets\spawn_set_catalog.h" />
     <ClInclude Include="src\state\build_data\hash_names\hash_name_catalog.h" />
     <ClInclude Include="src\state\build_data\hash_names\definition.h" />
+    <ClInclude Include="src\state\build_data\entity_names\entity_name_catalog.h" />
+    <ClInclude Include="src\state\build_data\entity_names\definition.h" />
     <ClInclude Include="src\state\build_data\spawn_sets\definition.h" />
     <ClInclude Include="src\state\build_data\vendors\definition.h" />
     <ClInclude Include="src\state\build_data\vendors\vendor_catalog.h" />

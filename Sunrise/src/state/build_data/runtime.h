@@ -13,6 +13,7 @@
 #include "collectibles/collectible_catalog.h"
 #include "constants/definition.h"
 #include "definition.h"
+#include "entity_names/definition.h"
 #include "hash_names/definition.h"
 #include "inventory/buckets/definition.h"
 #include "items/catalysts/definition.h"
@@ -675,6 +676,36 @@ publish_scenario_layouts(std::span<const scenarios::Definition> definitions,
  * @return True when the table is ready and holds that exact hash.
  */
 [[nodiscard]] bool find_hash_name(std::uint32_t hash, hash_names::Name& name) noexcept;
+
+/** @return True when the complete entity-name table is published. */
+[[nodiscard]] bool entity_names_ready() noexcept;
+
+/**
+ * Publishes every resolved entity alias in tag/name order.
+ * @param names Complete rows in ascending tag order, or an empty complete table.
+ * @return True when the rows pass the checks and any needed cache write succeeds.
+ */
+[[nodiscard]] bool publish_entity_names(std::span<const entity_names::Name> names) noexcept;
+
+/**
+ * Finds the first resolved name for an entity tag.
+ * @param tag Entity tag to look up.
+ * @param name Receives the matching row.
+ * @return True when the table is ready and holds that exact tag.
+ */
+[[nodiscard]] bool find_entity_name(std::uint32_t tag, entity_names::Name& name) noexcept;
+
+/** @return Number of cached entity-name aliases. */
+[[nodiscard]] std::size_t entity_name_count() noexcept;
+
+/**
+ * Copies the complete entity-name alias table in tag/name order.
+ * @param output Receives the rows when it can hold all of them.
+ * @param count Receives the copied row count.
+ * @return True when the domain is ready and output can hold every row.
+ */
+[[nodiscard]] bool snapshot_entity_names(std::span<entity_names::Name> output,
+                                         std::size_t& count) noexcept;
 
 /** @return True when a complete spawn-set catalog, empty or not, is published. */
 [[nodiscard]] bool spawn_sets_ready() noexcept;

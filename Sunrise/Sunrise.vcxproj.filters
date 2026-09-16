@@ -380,6 +380,7 @@
     <ClCompile Include="src\state\build_data\scenarios\scenario_catalog.cpp" />
     <ClCompile Include="src\state\build_data\spawn_sets\spawn_set_catalog.cpp" />
     <ClCompile Include="src\state\build_data\hash_names\hash_name_catalog.cpp" />
+    <ClCompile Include="src\state\build_data\entity_names\entity_name_catalog.cpp" />
     <ClCompile Include="src\state\activity\forced\activity_forced_destination.cpp" />
     <ClCompile Include="src\state\build_data\runtime\build_data_roster_runtime.cpp" />
     <ClCompile Include="src\client\content\scenarios\scenario_build.cpp" />
@@ -387,6 +388,8 @@
     <ClCompile Include="src\client\content\spawn_sets\spawn_set_build.cpp" />
     <ClCompile Include="src\client\content\hash_names\hash_name_build.cpp" />
     <ClCompile Include="src\client\content\hash_names\hash_name_matcher.cpp" />
+    <ClCompile Include="src\client\content\entity_names\entity_name_build.cpp" />
+    <ClCompile Include="src\client\content\entity_names\localized_aliases.cpp" />
     <ClCompile Include="src\client\content\spawn_sets\spawn_set_catalog_builder.cpp" />
     <ClCompile Include="src\client\content\scenarios\scenario_roster_build.cpp" />
     <ClCompile Include="src\client\content\scenarios\scenario_roster_groups.cpp" />
@@ -1059,6 +1062,8 @@
     <ClInclude Include="src\client\content\spawn_sets\spawn_set_build.h" />
     <ClInclude Include="src\client\content\hash_names\hash_name_build.h" />
     <ClInclude Include="src\client\content\hash_names\hash_name_matcher.h" />
+    <ClInclude Include="src\client\content\entity_names\entity_name_build.h" />
+    <ClInclude Include="src\client\content\entity_names\localized_aliases.h" />
     <ClInclude Include="src\client\content\spawn_sets\spawn_set_catalog_builder.h" />
     <ClInclude Include="src\client\content\investment\layout.h" />
     <ClInclude Include="src\client\content\investment\internal.h" />
@@ -1205,6 +1210,8 @@
     <ClInclude Include="src\state\build_data\spawn_sets\spawn_set_catalog.h" />
     <ClInclude Include="src\state\build_data\hash_names\hash_name_catalog.h" />
     <ClInclude Include="src\state\build_data\hash_names\definition.h" />
+    <ClInclude Include="src\state\build_data\entity_names\entity_name_catalog.h" />
+    <ClInclude Include="src\state\build_data\entity_names\definition.h" />
     <ClInclude Include="src\state\build_data\spawn_sets\definition.h" />
     <ClInclude Include="src\state\build_data\vendors\definition.h" />
     <ClInclude Include="src\state\build_data\vendors\vendor_catalog.h" />

@@ -7,6 +7,7 @@
 #include <cfloat>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <imgui.h>
 #include <span>
 #include <string_view>
@@ -127,6 +128,8 @@ std::vector<Candidate> g_allMainCandidates{};
 std::vector<state::build_data::entity_names::Name> g_names{};
 bool g_scanned{};
 std::size_t g_capturingKey{spawn_keys::kActionCount};
+/** Hex text buffer for the manual any-tag spawn section. */
+std::array<char, 16> g_tagInput{};
 
 void key_name(std::uint32_t virtualKey, std::array<char, 64>& output) noexcept {
     if (virtualKey == spawn_keys::kNoKey) {
@@ -679,6 +682,49 @@ void draw() noexcept {
         if (ImGui::Button("Cancel")) {
             native::cancel();
         }
+    }
+
+    if (ImGui::TreeNodeEx("Spawn any entity by tag", ImGuiTreeNodeFlags_SpanAvailWidth)) {
+        ImGui::TextUnformatted("Hex tag (e.g. 80809C0F) and a count, then pick an origin.");
+        // A single edit for the tag, amount and both spawn buttons keeps the section compact.
+        ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.30F);
+        ImGui::InputText("Tag", g_tagInput.data(), g_tagInput.size(), ImGuiInputTextFlags_CharsHexadecimal);
+        ImGui::SameLine();
+        static int amount = 1;
+        ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.20F);
+        ImGui::InputInt("Count", &amount, 1, 100);
+
+        std::uint32_t tag = 0xFFFFFFFFU;
+        const bool parsed = sscanf_s(g_tagInput.data(), "%x", &tag) == 1
+                            && tag != 0xFFFFFFFFU;
+        if (!parsed) {
+            ImGui::TextDisabled("Tag must be a hex value without the 0x prefix.");
+        } else {
+            const bool resident = native::is_tag_resident(tag);
+            if (resident) {
+                ImGui::TextUnformatted("Entity is loaded.");
+            } else {
+                ImGui::TextUnformatted("Entity is NOT loaded; the spawn request will be ignored.");
+            }
+            ImGui::BeginDisabled(native::busy());
+            if (ImGui::Button("At player", ImVec2(ImGui::GetContentRegionAvail().x * 0.49F, 0.0F))) {
+                native::Settings settings;
+                (void)native::request(tag,
+                                      native::Origin::player,
+                                      static_cast<std::uint32_t>((std::max)(amount, 1)),
+                                      settings);
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("At crosshair", ImVec2(-FLT_MIN, 0.0F))) {
+                native::Settings settings;
+                (void)native::request(tag,
+                                      native::Origin::crosshair,
+                                      static_cast<std::uint32_t>((std::max)(amount, 1)),
+                                      settings);
+            }
+            ImGui::EndDisabled();
+        }
+        ImGui::TreePop();
     }
 
     spawn_keys::Keybinds keybinds = spawn_keys::get();

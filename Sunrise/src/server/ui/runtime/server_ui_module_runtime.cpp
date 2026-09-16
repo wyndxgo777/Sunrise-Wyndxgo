@@ -6,7 +6,6 @@
 #include "../../../core/ui/modules/ui_module_descriptor.h"
 #include "../activity_host/activity_host_panel.h"
 #include "../activity_override/activity_override_panel.h"
-#include "../spawn/spawn_panel.h"
 #include "../tower_events/tower_events_panel.h"
 
 namespace sunrise::server::ui::runtime {
@@ -27,16 +26,9 @@ constexpr std::string_view kEventsStableId = "server.tower_events";
 /** Short menu label for the Tower Events page. */
 constexpr std::string_view kEventsDisplayName = "Events";
 
-/** A namespaced stable ID for the Spawn page. */
-constexpr std::string_view kSpawnStableId = "server.spawn";
-/** Short menu label for the Spawn page. */
-constexpr std::string_view kSpawnDisplayName = "Spawn";
-
 core::ui::modules::registry::PageRegistration g_overridePage;
 core::ui::modules::registry::PageRegistration g_hostPage;
 core::ui::modules::registry::PageRegistration g_eventsPage;
-core::ui::modules::registry::PageRegistration g_spawnPage;
-
 } // namespace
 
 /** @return True when the Server module owns all of its Core UI registry slots. */
@@ -67,22 +59,12 @@ bool initialize() noexcept {
         return false;
     }
 
-    if (!g_spawnPage.acquire(core::ui::modules::Owner::server,
-                             kSpawnStableId,
-                             kSpawnDisplayName,
-                             &spawn::draw)) {
-        g_eventsPage.release();
-        g_hostPage.release();
-        g_overridePage.release();
-        return false;
-    }
-
     return true;
 }
 
 /** Removes the Server module's pages from the Core UI registry. */
 void shutdown() noexcept {
-    g_spawnPage.release();
+
     g_eventsPage.release();
     g_hostPage.release();
     g_overridePage.release();

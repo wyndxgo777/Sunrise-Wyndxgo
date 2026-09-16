@@ -691,15 +691,13 @@ bool current_camera_pose(std::array<float, 3>& position,
     std::uint32_t controlled = kInvalidHandle;
     if (!current_controlled_handle(controlled)) {
         return false;
-    }led)) {
-        return false;
     }
 
     std::byte* const physics = g_playerComponent.load(std::memory_order_acquire);
     if (physics != nullptr && owns_player(physics)) {
         std::byte* const body = body_of(physics);
         if (body != nullptr) {
-            read_at(body + kBodyPositionX, position);
+            (void)read_at(body + kBodyPositionX, position);
         }
     }
 

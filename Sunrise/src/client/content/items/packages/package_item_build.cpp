@@ -11,6 +11,7 @@
 #include "../../../../state/build_data/runtime.h"
 #include "../../activity/activity_catalog_build.h"
 #include "../../activity/entity_position_profile_build.h"
+#include "../../entity_names/entity_name_build.h"
 #include "../../hash_names/hash_name_build.h"
 #include "../../scenarios/scenario_build.h"
 #include "../../spawn_sets/spawn_set_build.h"
@@ -48,6 +49,7 @@ namespace {
 bool ready() noexcept {
     return root_domains_ready() && state::build_data::scenario_layouts_ready()
            && state::build_data::spawn_sets_ready() && state::build_data::hash_names_ready()
+           && state::build_data::entity_names_ready()
            && state::build_data::vendor_catalog_ready()
            && content::activity::entity_position_profiles::ready()
            && (state::build_data::activities::ready()
@@ -83,6 +85,7 @@ bool build() noexcept {
         (void)content::scenarios::build(packageSource, storage.scratch);
         (void)content::spawn_sets::build(packageSource, storage.scratch);
         (void)content::hash_names::build(packageSource, storage.scratch);
+        (void)content::entity_names::build(packageSource, storage.scratch);
         (void)content::vendors::build(packageSource, storage.scratch);
         if (ready()) {
             SecureZeroMemory(&keys, sizeof keys);
