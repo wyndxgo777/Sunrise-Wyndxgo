@@ -15,6 +15,7 @@
 #include "../content/activity/scriptable_catalog_worker.h"
 #include "../content/bootstrap/bootstrap_token_publish.h"
 #include "../content/investment/worker.h"
+#include "../diagnostics/entity_create_probe.h"
 #include "../executable/image.h"
 #include "../hooks/account_registration/account_registration.h"
 #include "../hooks/assert_handler/assert_handler_lifecycle.h"
@@ -261,6 +262,12 @@ void clear_game_targets() noexcept {
                      packageKeys ? core::log::Level::info : core::log::Level::warn,
                      packageKeys ? "ev=activate stage=package_keys result=ok"
                                  : "ev=activate stage=package_keys result=fail");
+
+    // Stocks the client's entity free-slot bitmap, which this host leaves entirely unstocked.
+    // The hook covers only the index allocator, whose two-argument shape was read out of its own
+    // body. The initialiser beside it is left alone: its fifth argument is passed on the stack,
+    // and a four-argument replacement black-screened the load.
+    (void)diagnostics::install_entity_create_probe();
 
     /*
      * Everything below preserves Cowisma's existing activation path.
