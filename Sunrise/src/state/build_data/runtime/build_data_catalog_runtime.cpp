@@ -199,15 +199,15 @@ bool entity_names_ready() noexcept {
 
 /** Publishes the resolved entity names in one step. */
 bool publish_entity_names(std::span<const entity_names::Name> names) noexcept {
-    runtime::persistence::Transaction transaction;
-    if (!transaction.active()) {
+    // Entity names are process-local launcher data rebuilt from the installed packages every
+    // boot, like the activity catalog. They are not part of the persisted cache, so a saved
+    // cache must not freeze them out: a Transaction would refuse every publish on a cache hit
+    // and leave the domain unready, which stalls the package pass indefinitely.
+    if (!entity_names::replace(names)) {
         return false;
     }
-    if (!entity_names::replace(names)) {
-        return transaction.finish(false, rollback_entity_name_catalog_publication);
-    }
     runtime::entity_name_catalog::publish();
-    return transaction.finish(true, rollback_entity_name_catalog_publication);
+    return true;
 }
 
 /** Finds the first resolved name for an entity tag. */
