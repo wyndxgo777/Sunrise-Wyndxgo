@@ -8,14 +8,8 @@ PR 94
 
 FORKS:
 
-Coop fork:
-https://github.com/Techno453/Sunrise-coop-fork
-
 Breshi's sandbox:
 https://github.com/Breshi123/Sunrise-Sandbox
-
-ReGlitched:
-https://github.com/ReGlitched/Sunrise
 
 Drkarisma's Cowisma fork:
 https://github.com/DoctorKarisma/Sunrise-AIO-Cowisma
