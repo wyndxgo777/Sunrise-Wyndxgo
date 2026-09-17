@@ -1,3 +1,6 @@
+## This is my own personal project, if you decide to use this, expect bugs.. lots of them
+
+
 # DISCLAIMER: THIS IS A MERGE OF A BUNCH OF FORKS AND PRS I FOUND HERES THE LIST SO FAR:
 Pull requests: 
 PR 115
