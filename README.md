@@ -23,6 +23,9 @@ https://github.com/DoctorKarisma/Sunrise-AIO-Cowisma
 Sunrise gear editor:
 https://github.com/WalterGerig/SunriseGearEditor
 
+Techno's co-op fork
+https://github.com/Techno453/Sunrise-coop-fork
+
 shoutout to all of these people for being cool
 
 # Sunrise
