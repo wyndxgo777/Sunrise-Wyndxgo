@@ -99,7 +99,7 @@ void report_version(std::uint32_t fileVersion) noexcept {
     }
     const HANDLE file = CreateFileW(configPath.chars.data(),
                                     GENERIC_WRITE,
-                                    0,
+                                    FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
                                     nullptr,
                                     CREATE_NEW,
                                     FILE_ATTRIBUTE_NORMAL,
@@ -147,7 +147,7 @@ bool initialize(void* module) noexcept {
 
     const HANDLE file = CreateFileW(configPath.chars.data(),
                                     GENERIC_READ,
-                                    FILE_SHARE_READ,
+                                    FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
                                     nullptr,
                                     OPEN_EXISTING,
                                     FILE_ATTRIBUTE_NORMAL,
@@ -163,7 +163,7 @@ bool initialize(void* module) noexcept {
         }
         readableFile = CreateFileW(configPath.chars.data(),
                                    GENERIC_READ,
-                                   FILE_SHARE_READ,
+                                   FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
                                    nullptr,
                                    OPEN_EXISTING,
                                    FILE_ATTRIBUTE_NORMAL,

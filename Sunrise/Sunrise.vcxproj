@@ -209,6 +209,7 @@
     <ClCompile Include="src\core\ui\fonts\runtime\ui_runtime_font_lifecycle.cpp" />
     <ClCompile Include="src\core\ui\scaling\dpi\ui_dpi_scaling.cpp" />
     <ClCompile Include="src\core\ui\theme\sunrise_ui_theme.cpp" />
+    <ClCompile Include="src\core\ui\toast\ui_toast_runtime.cpp" />
     <ClCompile Include="src\core\ui\layout\ui_layout_lifecycle.cpp" />
     <ClCompile Include="src\core\ui\layout\navigation\ui_layout_navigation.cpp" />
     <ClCompile Include="src\core\ui\layout\ui_layout_render.cpp" />
@@ -927,6 +928,8 @@
     <ClCompile Include="src\server\activity\host_runtime_mission_inputs.cpp" />
     <ClCompile Include="src\server\bap\encrypted\push\activity\activity_incident_push.cpp" />
     <ClCompile Include="src\server\ui\runtime\server_ui_module_runtime.cpp" />
+    <ClCompile Include="src\server\ui\weapon_editor\weapon_editor_panel.cpp" />
+    <ClInclude Include="src\server\ui\weapon_editor\weapon_editor_panel.h" />
     <ClCompile Include="src\server\ui\spawn\spawn_panel.cpp" />
     <ClCompile Include="src\server\ui\tower_events\tower_events_panel.cpp" />
     <ClCompile Include="src\server\ui\activity_override\activity_override_lists.cpp" />
@@ -1411,6 +1414,7 @@
     <ClInclude Include="src\core\ui\scaling\scaling.h" />
     <ClInclude Include="src\core\ui\scaling\dpi\ui_dpi_scaling.h" />
     <ClInclude Include="src\core\ui\theme\sunrise_ui_theme.h" />
+    <ClInclude Include="src\core\ui\toast\ui_toast_runtime.h" />
     <ClInclude Include="src\core\ui\layout\layout.h" />
     <ClInclude Include="src\core\ui\layout\ui_layout_lifecycle.h" />
     <ClInclude Include="src\core\ui\layout\navigation\ui_layout_navigation.h" />

@@ -61,3 +61,7 @@ IDR_SQLITE_NOTICE RCDATA "../vendor/sqlite/NOTICE.txt"
 
 IDR_ACCOUNT_SETTINGS_SCHEMA RCDATA "database/account_settings_schema.sql"
 IDR_ACCOUNT_SETTINGS_DEFAULTS RCDATA "database/account_settings_defaults.sql"
+
+IDR_ITEM_NAMES RCDATA "item_names.bin"
+IDR_ITEM_ICONS RCDATA "item_icons.pack"
+IDR_ITEM_RARITY RCDATA "item_rarity.bin"
