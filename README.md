@@ -20,7 +20,10 @@ https://github.com/ReGlitched/Sunrise
 Drkarisma's Cowisma fork:
 https://github.com/DoctorKarisma/Sunrise-AIO-Cowisma
 
-shoutout to all of these people for 
+Sunrise gear editor:
+https://github.com/WalterGerig/SunriseGearEditor
+
+shoutout to all of these people for being cool
 
 # Sunrise
 
