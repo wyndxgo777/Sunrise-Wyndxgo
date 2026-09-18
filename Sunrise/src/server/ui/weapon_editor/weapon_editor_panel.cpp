@@ -2848,16 +2848,16 @@ void apply_pending(const WeaponRow& weapon) noexcept {
 
         state::PendingSocketPlug mutation{};
 
-        if ((!state::prepare_socket_plug(
-                weapon.item.instanceSoid, lane, g_pendingPlugDefinitions[lane], mutation)
-            || !state::commit_socket_plug(mutation))
+        if (!state::prepare_socket_plug(
+                weapon.item.instanceSoid, lane, g_pendingPlugDefinitions[lane], mutation)) {
+            ++failed;
+            continue;
+        }
+        if (!state::commit_socket_plug(mutation)
             && !apply_socket_plug_direct(
                 weapon.item.instanceSoid, lane, g_pendingPlugDefinitions[lane])) {
-
             ++failed;
-
             continue;
-
         }
 
         g_pendingPlugLanes[lane] = false;
@@ -5990,26 +5990,19 @@ run_randomizer(const state::CharacterState& character,
             }
 
             state::PendingSocketPlug mutation{};
-
-            if ((!state::prepare_socket_plug(target.item.instanceSoid,
-
-                                             lane,
-
-                                             *choice,
-
-                                             mutation)
-
-                || !state::commit_socket_plug(mutation))
-                && !apply_socket_plug_direct(target.item.instanceSoid,
-
-                                             lane,
-
-                                             *choice)) {
-
+            if (!state::prepare_socket_plug(target.item.instanceSoid,
+                                            lane,
+                                            *choice,
+                                            mutation)) {
                 ++result.failures;
-
                 continue;
-
+            }
+            if (!state::commit_socket_plug(mutation)
+                && !apply_socket_plug_direct(target.item.instanceSoid,
+                                             lane,
+                                             *choice)) {
+                ++result.failures;
+                continue;
             }
 
             ++result.randomizedSockets;

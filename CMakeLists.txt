@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.31)
+﻿cmake_minimum_required(VERSION 3.31)
 project(Sunrise C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -126,6 +126,7 @@ target_link_libraries(steam_api64 PRIVATE
     kernel32 bcrypt user32 gdi32 dwmapi
     d3dcompiler shell32 ws2_32 synchronization
     windowscodecs
+    ole32
 )
 
 set_target_properties(steam_api64 PROPERTIES

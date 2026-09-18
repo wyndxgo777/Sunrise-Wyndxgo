@@ -188,7 +188,12 @@ void release(void* pointer) noexcept {
     if (pointer == nullptr) {
         return;
     }
-    Block* block = reinterpret_cast<Block*>(static_cast<std::byte*>(pointer) - sizeof(Block));
+    const std::byte* const arenaBegin = g_storage.data();
+    const std::byte* const payloadBegin = static_cast<const std::byte*>(pointer);
+    if (payloadBegin < arenaBegin + sizeof(Block) || payloadBegin >= arenaBegin + g_storage.size()) {
+        return;
+    }
+    Block* block = reinterpret_cast<Block*>(const_cast<std::byte*>(payloadBegin) - sizeof(Block));
     if (block->free) {
         return;
     }

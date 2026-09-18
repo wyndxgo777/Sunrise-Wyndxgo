@@ -28,6 +28,9 @@ namespace {
 constexpr std::uint64_t kServerTickMs = 10;
 std::atomic_bool g_serverThreadStarted{false};
 
+/** True once the dispatch pump asked the server slice to stop. */
+std::atomic_bool g_server_stop_requested{false};
+
 /**
  * Runs the server on its own thread. The game frame can block on a loopback send until the
  * server answers, so the game must never be the server's clock.
@@ -35,9 +38,13 @@ std::atomic_bool g_serverThreadStarted{false};
 DWORD WINAPI server_thread(LPVOID) noexcept {
     for (;;) {
         Sleep(static_cast<DWORD>(kServerTickMs));
+        if (g_server_stop_requested.load(std::memory_order_acquire)) {
+            break;
+        }
         // The service's two-second timing report is also the thread's proof of life.
         server::service(GetTickCount64());
     }
+    return 0;
 }
 
 /** Starts the server thread once, after the first activated slice. */
