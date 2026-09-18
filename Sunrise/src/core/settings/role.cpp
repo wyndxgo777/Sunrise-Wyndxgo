@@ -11,6 +11,8 @@ bool parse_role(std::string_view text, Role& output) noexcept {
         output = Role::client;
     } else if (text == "host") {
         output = Role::host;
+    } else if (text == "dedicated") {
+        output = Role::dedicated;
     } else {
         return false;
     }

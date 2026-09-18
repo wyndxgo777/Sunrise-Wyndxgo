@@ -74,15 +74,25 @@ struct Settings {
  */
 [[nodiscard]] bool initialize(void* module) noexcept;
 
+/**
+ * Loads the settings file from one directory, for the headless dedicated EXE that has no
+ * DLL module or bundled default-settings resource.
+ * @param directory Owned folder holding settings.json (and default_settings.json as fallback
+ *        source when settings.json is missing).
+ * @return True when defaults or a valid settings file are active.
+ */
+[[nodiscard]] bool initialize_from_directory(const wchar_t* directory) noexcept;
+
 /** Resets active settings to the fixed defaults. */
 void shutdown() noexcept;
 
 /** @return Active read-only Core settings. */
 [[nodiscard]] const Settings& get() noexcept;
 
-/** Native multiplayer adapters serve both the playing host and joining clients. */
+/** Native multiplayer adapters serve the playing host, joining clients, and dedicated. */
 [[nodiscard]] inline bool multiplayer() noexcept {
-    return role() == Role::host || get().server.upstream.enabled;
+    return role() == Role::host || role() == Role::dedicated
+        || get().server.upstream.enabled;
 }
 
 } // namespace sunrise::core::settings
