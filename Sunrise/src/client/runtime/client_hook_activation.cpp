@@ -20,9 +20,7 @@
 #include "../hooks/account_registration/account_registration.h"
 #include "../hooks/assert_handler/assert_handler_lifecycle.h"
 #include "../hooks/async_io/async_io_lifetime_guard.h"
-#include "../hooks/bitmap/bitmap_hook_lifecycle.h"
 #include "../hooks/bootflow/bootflow_hook_lifecycle.h"
-#include "../hooks/cine_auth_probe/cine_auth_probe.h"
 #include "../hooks/cine_probe/cine_probe.h"
 #include "../hooks/config_getter/config_getter_lifecycle.h"
 #include "../hooks/cursor/runtime.h"
@@ -280,6 +278,8 @@ void clear_game_targets() noexcept {
     (void)hooks::hitch_probe::install();
     (void)hooks::stall_probe::install();
     (void)hooks::sense_chain_guard::install();
+    // The stock async-I/O wrapper reloads its singleton after pumping it and can observe the
+    // legitimate teardown/recreate null window. This optional guard keeps the owner it pumped.
     (void)hooks::async_io::install();
 
     (void)hooks::config_getter::install();

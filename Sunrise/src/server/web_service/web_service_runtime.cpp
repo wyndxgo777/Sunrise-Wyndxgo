@@ -125,12 +125,18 @@ bool note_character_writeback(
 
     const int written = std::snprintf(line.data(),
                                       line.size(),
-                                      "ev=activity stage=writeback result=%s join_lock_flags=%u",
+"ev=activity stage=writeback result=%s world_state=%u "
+                                      "activity=%d/%d/%d selector=%d join_lock_flags=%u",
                                       parsed ? "ok" : "unparsed",
+                                      static_cast<unsigned>(request.worldState),
+                                      static_cast<int>(request.activityBytes[0]),
+                                      static_cast<int>(request.activityBytes[1]),
+                                      static_cast<int>(request.activityBytes[2]),
+                                      static_cast<int>(request.activitySelector),
                                       static_cast<unsigned>(request.joinLockFlags));
     if (written > 0) {
         core::log::write(core::log::Channel::server,
-                         core::log::Level::info,
+                         parsed ? core::log::Level::info : core::log::Level::warn,
                          {line.data(), static_cast<std::size_t>(written)});
     }
     if (!parsed
@@ -381,6 +387,8 @@ bool consume(std::span<const std::byte> request,
     }
 
     if (message.opcode == middleware::web_service::messages::opcode702::kOpcode) {
+// The write-back def carries the outcome the caller reports; a write-back the server cannot
+        // read still has its outcome reviewed, and returning false refuses it on that path.
         if (!note_character_writeback(message, presentation, outcome)) {
             return false;
         }

@@ -12,30 +12,27 @@
 
 #include "../../../../../core/logging/log.h"
 #include "../../../../../middleware/bap/activity_message/activity_host_control.h"
-#include "../../../../../middleware/bap/activity_message/scriptable_auth_body.h"
 #include "../../../../../middleware/bap/activity_message/sensor_auth_update.h"
 #include "../../../../../middleware/secure_channel/runtime.h"
 #include "../../../../../state/activity/bubble_authority/runtime.h"
+#include "../../../../../state/activity/membership/activity_membership_query.h"
 #include "../../../../../state/activity/runtime.h"
 #include "../../../../activity/host_runtime.h"
 #include "../../../../gameplay/peer/peer_transport.h"
 #include "../../../../gameplay/squad_entity_retirement.h"
 #include "activity_notification_frame.h"
+#include "activity_roster_device_publication.h"
 #include "internal.h"
 
 namespace sunrise::server::bap::encrypted::push::activity {
 namespace {
 
 namespace message = middleware::bap::activity_message::sensor_auth_update;
-namespace scriptable = middleware::bap::activity_message::scriptable_auth;
 
 /** No bubble was granted with this body. */
 constexpr std::int32_t kNoGrant = -1;
 /** The destination name a refusal reports. The selection field is 40 bytes wide. */
 constexpr std::size_t kDestinationCapacity = 40;
-/** A body over this size is never suppressed, only delivered. */
-constexpr std::size_t kBodyRecordCapacity = 16 * 1024;
-
 /** @return Activity Host diagnostic status for one refused roster build. */
 [[nodiscard]] server::activity::host::OutputStatus
 host_output_status(RosterOutcome outcome) noexcept {
@@ -57,190 +54,101 @@ host_output_status(RosterOutcome outcome) noexcept {
     return Status::frameRefused;
 }
 
-/** One outbound body kept for the byte-identical repeat check. */
-struct BodyRecord final {
-    std::array<std::byte, kBodyRecordCapacity> bytes{};
-    std::uint64_t bindingGeneration{};
-    std::uint32_t size{};
-    bool valid{};
-};
+/** @return True when the body writes the participation record, the only field with the hold. */
+[[nodiscard]] bool carries_participation(const message::Roster& roster) noexcept {
+    for (std::size_t index = 0; index < roster.groupCount; ++index) {
+        const message::Group& group = roster.groups[index];
+        if (!group.retired && group.key == roster.playerKeyGroup) {
+            return true;
+        }
+    }
+    return false;
+}
 
 /**
- * Activity session and membership revision one body carries.
+ * Activity session and membership revision one membership body carries.
  * The acknowledgement lives on the member row, so a member holding two links to one activity
  * host would otherwise see the trigger closed by the link that did receive the revision.
+ * The delivered-body byte records live in activity_roster_push_records.cpp; this parallel
+ * receipt keeps the session/revision cursor only this link's own acknowledgement is keyed by.
  */
 struct MembershipCursor final {
     std::uint64_t sessionId{};
     std::uint32_t revision{};
 };
 
-/** Per-connection last-body records for the byte-identical repeat check. */
-struct ConnectionRecord final {
-    BodyRecord rosterSent{};
-    BodyRecord rosterStaged{};
-    BodyRecord membershipSent{};
-    BodyRecord membershipStaged{};
-    MembershipCursor membershipSentCursor{};
-    MembershipCursor membershipStagedCursor{};
-    /**
-     * The delivered membership this recipient has answered for, kept against the link that carried
-     * the body. The member row holds the receipt for the session as a whole; this one speaks for
-     * the connection, which matters when one member holds two links to the same session.
-     */
-    MembershipCursor membershipAckedCursor{};
-    std::uint64_t membershipAckedGeneration{};
+/** Per-connection cursor receipt for the membership bodies only this link delivered. */
+struct MembershipReceipt final {
+    MembershipCursor staged{};
+    MembershipCursor sent{};
+    MembershipCursor acked{};
+    std::uint64_t stagedBinding{};
+    std::uint64_t sentBinding{};
+    std::uint64_t ackedBinding{};
+    bool stagedValid{};
+    bool sentValid{};
+    bool ackedValid{};
 };
 
 // All access runs under the BAP lock, like the Session fields these records extend.
-std::array<ConnectionRecord, kSessionCount> g_connectionRecords{};
+std::array<MembershipReceipt, kSessionCount> g_membershipReceipts{};
 
-/** @return This connection's record, or null for an out-of-range connection id. */
-[[nodiscard]] ConnectionRecord* connection_record(const Session& session) noexcept {
-    return session.id != 0 && session.id <= g_connectionRecords.size()
-               ? &g_connectionRecords[session.id - 1]
-               : nullptr;
+/** @return This connection's receipt, or null for an out-of-range connection id. */
+[[nodiscard]] MembershipReceipt* membership_receipt(const Session& session) noexcept {
+    return session.id < g_membershipReceipts.size() ? &g_membershipReceipts[session.id] : nullptr;
 }
 
-/** @return True when the record holds this exact body for this exact binding. */
-[[nodiscard]] bool matches_record(const BodyRecord& record,
-                                  std::uint64_t bindingGeneration,
-                                  std::span<const std::byte> body) noexcept {
-    return record.valid && record.bindingGeneration == bindingGeneration
-           && record.size == body.size()
-           && std::equal(body.begin(), body.end(), record.bytes.begin());
-}
-
-/** Copies one staged body into a record; an oversized body clears it instead. */
-void fill_record(BodyRecord& record,
-                 std::uint64_t bindingGeneration,
-                 std::span<const std::byte> body) noexcept {
-    record.valid = false;
-    if (body.size() > record.bytes.size()) {
-        return;
-    }
-    std::copy(body.begin(), body.end(), record.bytes.begin());
-    record.bindingGeneration = bindingGeneration;
-    record.size = static_cast<std::uint32_t>(body.size());
-    record.valid = true;
-}
-
-/** Promotes a staged record to the delivered one when its binding still matches. */
-void promote_record(BodyRecord& staged,
-                    BodyRecord& sent,
-                    std::uint64_t bindingGeneration) noexcept {
-    if (staged.valid && staged.bindingGeneration == bindingGeneration) {
-        sent = staged;
-    }
-    staged.valid = false;
-}
-
-/** Names where this body first differs from the last one delivered on this connection. */
-void report_roster_body_delta(const Session& session, std::span<const std::byte> body) noexcept {
-    const ConnectionRecord* const record = connection_record(session);
-    if (record == nullptr || !record->rosterSent.valid
-        || record->rosterSent.bindingGeneration != session.activity.bindingGeneration) {
-        return;
-    }
-    const std::size_t previous = record->rosterSent.size;
-    const std::size_t shared = (std::min)(previous, body.size());
-    std::size_t offset = 0;
-    while (offset < shared && body[offset] == record->rosterSent.bytes[offset]) {
-        ++offset;
-    }
-    if (offset == shared && previous == body.size()) {
-        return;
-    }
-    const unsigned previousByte =
-        offset < previous ? std::to_integer<unsigned>(record->rosterSent.bytes[offset]) : 0U;
-    const unsigned currentByte =
-        offset < body.size() ? std::to_integer<unsigned>(body[offset]) : 0U;
-    std::array<char, core::log::kLineCapacity> line{};
-    const int written = std::snprintf(line.data(),
-                                      line.size(),
-                                      "ev=activity stage=roster_delta first_byte=%zu bit=%zu "
-                                      "bytes=%zu was_bytes=%zu old=0x%02X new=0x%02X",
-                                      offset,
-                                      offset * 8U,
-                                      body.size(),
-                                      previous,
-                                      previousByte,
-                                      currentByte);
-    if (written > 0) {
-        core::log::write(core::log::Channel::server,
-                         core::log::Level::debug,
-                         {line.data(), static_cast<std::size_t>(written)});
+/**
+ * Folds one staged cursor onto the delivered cursor once this binding has a latched membership
+ * delivery. Nothing is folded while an older delivered cursor already holds this binding, so a
+ * revision whose frame failed cannot borrow an earlier real delivery; the byte-identical repeat
+ * check claims those at the next staging instead.
+ */
+void fold_membership_receipt(const Session& session, MembershipReceipt& receipt) noexcept {
+    if (receipt.stagedValid && receipt.stagedBinding == session.activity.bindingGeneration
+        && session.activityMembershipSentGeneration == session.activity.bindingGeneration
+        && !(receipt.sentValid && receipt.sentBinding == session.activity.bindingGeneration)) {
+        receipt.sent = receipt.staged;
+        receipt.sentBinding = receipt.stagedBinding;
+        receipt.sentValid = true;
     }
 }
 
 } // namespace
 
-/** @return True when this body equals the last roster body delivered on this connection. */
-bool repeats_delivered_roster_body(const Session& session,
-                                   std::span<const std::byte> body) noexcept {
-    const ConnectionRecord* const record = connection_record(session);
-    return record != nullptr
-           && matches_record(record->rosterSent, session.activity.bindingGeneration, body);
-}
+/** The delivered-body half of the membership record, from activity_roster_push_records.cpp. */
+void stage_membership_body_record(const Session& session, std::span<const std::byte> body) noexcept;
 
-/** Keeps one staged roster body until its frame outcome is known. */
-void stage_roster_body_record(const Session& session, std::span<const std::byte> body) noexcept {
-    ConnectionRecord* const record = connection_record(session);
-    if (record != nullptr) {
-        fill_record(record->rosterStaged, session.activity.bindingGeneration, body);
-    }
-}
-
-/** Promotes the staged roster body to the delivered record. */
-void commit_roster_body_record(const Session& session) noexcept {
-    ConnectionRecord* const record = connection_record(session);
-    if (record != nullptr) {
-        promote_record(
-            record->rosterStaged, record->rosterSent, session.activity.bindingGeneration);
-    }
-}
-
-/** Drops the staged roster body of a discarded frame. */
-void discard_roster_body_record(const Session& session) noexcept {
-    ConnectionRecord* const record = connection_record(session);
-    if (record != nullptr) {
-        record->rosterStaged.valid = false;
-    }
-}
-
-/** @return True when this body equals the last membership body delivered on this connection. */
-bool repeats_delivered_membership_body(const Session& session,
-                                       std::span<const std::byte> body) noexcept {
-    const ConnectionRecord* const record = connection_record(session);
-    return record != nullptr
-           && matches_record(record->membershipSent, session.activity.bindingGeneration, body);
-}
-
-/** Keeps one staged membership body until its frame outcome is known. */
+/**
+ * Keeps one staged membership body until its frame outcome is known.
+ * Forwards to the delivered-body record in activity_roster_push_records.cpp and adds the
+ * session/revision cursor this connection's own acknowledgement is keyed by, because one member
+ * row covers a whole session while this receipt speaks for the link that carried the body.
+ * @param sessionId Activity session whose membership revision this body carries.
+ * @param revision Membership revision encoded in the body.
+ */
 void stage_membership_body_record(const Session& session,
                                   std::span<const std::byte> body,
                                   std::uint64_t sessionId,
                                   std::uint32_t revision) noexcept {
-    ConnectionRecord* const record = connection_record(session);
-    if (record != nullptr) {
-        fill_record(record->membershipStaged, session.activity.bindingGeneration, body);
-        record->membershipStagedCursor = {sessionId, revision};
+    stage_membership_body_record(session, body);
+    MembershipReceipt* const receipt = membership_receipt(session);
+    if (receipt == nullptr || sessionId == state::activity::kAbsentSessionId
+        || revision == state::activity::membership::kAbsentRevision) {
+        return;
     }
-}
-
-/** Promotes the staged membership body to the delivered record. */
-void commit_membership_body_record(const Session& session) noexcept {
-    ConnectionRecord* const record = connection_record(session);
-    if (record != nullptr) {
-        // The cursor moves on the same rule as the body record: a body the client never received
-        // was never delivered down this link, so it stays owed.
-        if (record->membershipStaged.valid
-            && record->membershipStaged.bindingGeneration == session.activity.bindingGeneration) {
-            record->membershipSentCursor = record->membershipStagedCursor;
-        }
-        promote_record(
-            record->membershipStaged, record->membershipSent, session.activity.bindingGeneration);
+    // A body byte-identical to the last delivered one was already committed on this binding; it
+    // is a repeat staging, not a new delivery, and still reports the delivered cursor so this
+    // link stops owing the revision it already holds.
+    if (repeats_delivered_membership_body(session, body)) {
+        receipt->sent = {sessionId, revision};
+        receipt->sentBinding = session.activity.bindingGeneration;
+        receipt->sentValid = true;
+        return;
     }
+    receipt->staged = {sessionId, revision};
+    receipt->stagedBinding = session.activity.bindingGeneration;
+    receipt->stagedValid = true;
 }
 
 /** @return True when this connection has not itself delivered this membership revision. */
@@ -251,49 +159,42 @@ bool connection_owes_membership(const Session& session,
         || revision == state::activity::membership::kAbsentRevision) {
         return false;
     }
-    const ConnectionRecord* const record = connection_record(session);
-    return record == nullptr || !record->membershipSent.valid
-           || record->membershipSent.bindingGeneration != session.activity.bindingGeneration
-           || record->membershipSentCursor.sessionId != sessionId
-           || record->membershipSentCursor.revision != revision;
+    MembershipReceipt* const receipt = membership_receipt(session);
+    if (receipt == nullptr) {
+        return true;
+    }
+    fold_membership_receipt(session, *receipt);
+    return !receipt->sentValid || receipt->sentBinding != session.activity.bindingGeneration
+           || receipt->sent.sessionId != sessionId || receipt->sent.revision != revision;
 }
 
 /** Records this recipient's receipt for the membership body this connection delivered. */
 void note_membership_acknowledgement(const Session& session, std::uint32_t revision) noexcept {
-    ConnectionRecord* const record = connection_record(session);
-    if (record == nullptr || revision == state::activity::membership::kAbsentRevision
-        || !record->membershipSent.valid
-        || record->membershipSent.bindingGeneration != session.activity.bindingGeneration
-        || record->membershipSentCursor.revision != revision) {
+    MembershipReceipt* const receipt = membership_receipt(session);
+    if (receipt == nullptr || revision == state::activity::membership::kAbsentRevision) {
         return;
     }
-    record->membershipAckedCursor = record->membershipSentCursor;
-    record->membershipAckedGeneration = session.activity.bindingGeneration;
+    fold_membership_receipt(session, *receipt);
+    if (receipt->sentValid && receipt->sentBinding == session.activity.bindingGeneration
+        && receipt->sent.revision == revision) {
+        receipt->acked = receipt->sent;
+        receipt->ackedBinding = session.activity.bindingGeneration;
+        receipt->ackedValid = true;
+    }
 }
 
 /** @return True when this connection's last delivered membership body has been acknowledged. */
 bool connection_membership_acknowledged(const Session& session) noexcept {
-    const ConnectionRecord* const record = connection_record(session);
-    return record != nullptr && record->membershipSent.valid
-           && record->membershipSent.bindingGeneration == session.activity.bindingGeneration
-           && record->membershipAckedGeneration == session.activity.bindingGeneration
-           && record->membershipAckedCursor.sessionId == record->membershipSentCursor.sessionId
-           && record->membershipAckedCursor.revision == record->membershipSentCursor.revision;
-}
-
-/** Adopts the join burst's staged membership body under the connection's new generation. */
-void adopt_join_membership_record(const Session& session) noexcept {
-    ConnectionRecord* const record = connection_record(session);
-    if (record == nullptr || !record->membershipStaged.valid) {
-        return;
+    MembershipReceipt* const receipt = membership_receipt(session);
+    if (receipt == nullptr) {
+        return false;
     }
-    // The body was staged before the join commit reserved this generation.
-    record->membershipStaged.bindingGeneration = session.activity.bindingGeneration;
-    record->membershipSentCursor = record->membershipStagedCursor;
-    promote_record(
-        record->membershipStaged, record->membershipSent, session.activity.bindingGeneration);
+    fold_membership_receipt(session, *receipt);
+    return receipt->sentValid && receipt->sentBinding == session.activity.bindingGeneration
+           && receipt->ackedValid && receipt->ackedBinding == session.activity.bindingGeneration
+           && receipt->acked.sessionId == receipt->sent.sessionId
+           && receipt->acked.revision == receipt->sent.revision;
 }
-
 /** Copies the decode identities from one complete, already-encoded msg-5 roster snapshot. */
 bool build_roster_decode_map(const message::Roster& roster,
                              std::uint64_t bindingGeneration,
@@ -332,8 +233,12 @@ bool append_roster_notification(
     const EffectiveRegion* exactRegion,
     bool solicited,
     const RefreshReport* refresh,
-    bool allowEntityRetirement) noexcept {
-    if (written > response.size()) {
+    bool allowEntityRetirement,
+    bool peerLeave) noexcept {
+    // The client reported it is leaving and the leave delta already went out on this link.
+    const bool left = session.activityLeftGeneration != 0
+                      && session.activityLeftGeneration == session.activity.bindingGeneration;
+    if (written > response.size() || left) {
         return false;
     }
     const auto initialLeases = session.activityRosterGroupLeases;
@@ -355,20 +260,32 @@ bool append_roster_notification(
         server::activity::host::pending_scriptable_override_for_activity_client(
             session.activity.session, session.activity.bindingGeneration, scriptablePending);
     const bool singleScriptableLink =
-        !hasScriptablePending
-        || activity_link_count_locked(session.activity.session, session.activity.bindingGeneration)
-               == 1;
+        !hasScriptablePending || activity_link_count_locked(session.activity.session) == 1;
+    // A leave delta retires every group, so it carries no host state and no typed body. Both stay
+    // owed and neither is spent on it.
+    const bool ownsPending = hasScriptablePending && singleScriptableLink && !peerLeave;
+    const bool ownsHostState = hostStatePending && !peerLeave;
     const bool squadPending =
-        hasScriptablePending && singleScriptableLink
+        ownsPending
         && scriptablePending.kind == server::activity::host::ScriptableOverrideKind::squad;
     // A lifetime request changes the type-17 state the builder writes; it substitutes no slot body.
     const bool lifetimePending =
-        hasScriptablePending && singleScriptableLink
+        ownsPending
         && scriptablePending.kind == server::activity::host::ScriptableOverrideKind::lifetime;
     // State 4 shows the loading screen and releases once the region is instantiated. The spawn
     // hold is `awaiting_client_sync`, not the lifetime. An explicit lifetime request still wins.
     const bool clientLoading = !client_region_ready(session, refresh);
-    const bool bodyPending = hasScriptablePending && singleScriptableLink && !lifetimePending;
+    // No unsolicited msg 5 while the client loads: with no slice set current it rewrites the live
+    // presence mask and relinks sense records. The region report is answered solicited. Only the
+    // private link's session sees the placement, so only it holds.
+    if (clientLoading && !solicited && !peerLeave
+        && session.activity.role == ActivityClientRole::privateCurrent) {
+        report_roster_deferral(session,
+                               hostStatePending ? hostState.revision : 0,
+                               hasScriptablePending ? scriptablePending.revision : 0);
+        return false;
+    }
+    const bool bodyPending = ownsPending && !lifetimePending;
     // Bodies committed behind the head share its push, so they are installed on this same body.
     std::array<server::activity::host::PendingScriptableOverride,
                server::activity::host::kPendingScriptableTailCapacity>
@@ -395,6 +312,7 @@ bool append_roster_notification(
             target.value.byteCount = source.byteCount;
             target.value.sdkCompiled = source.sdkCompiled;
             target.value.present = true;
+            target.value.originatingHostRevision = source.revision;
             target.rosterGroupIndex = source.target.rosterGroupIndex;
             target.rosterSlotOffset = source.target.rosterSlotOffset;
             target.stateLocalRosterTarget = source.target.stateLocalRoster;
@@ -415,7 +333,8 @@ bool append_roster_notification(
         authOverride.byteCount = scriptablePending.byteCount;
         authOverride.sdkCompiled = scriptablePending.sdkCompiled;
         authOverride.present = true;
-    } else if (hasScriptablePending && !singleScriptableLink) {
+        authOverride.originatingHostRevision = scriptablePending.revision;
+    } else if (hasScriptablePending && !singleScriptableLink && !peerLeave) {
         server::activity::host::note_scriptable_attempt(
             session.activity.session,
             session.activity.bindingGeneration,
@@ -462,14 +381,14 @@ bool append_roster_notification(
     const std::string_view name(destination.data(), destinationLength);
     if (outcome != RosterOutcome::published) {
         report_roster_push(session, snapshot, name, 0, kNoGrant, outcome, 0, 0);
-        if (hostStatePending) {
+        if (ownsHostState) {
             server::activity::host::note_auth_attempt(session.activity.session,
                                                       session.activity.bindingGeneration,
                                                       hostState.revision,
                                                       hostState.lifetimeState,
                                                       host_output_status(outcome));
         }
-        if (hasScriptablePending && singleScriptableLink) {
+        if (ownsPending) {
             server::activity::host::note_scriptable_attempt(session.activity.session,
                                                             session.activity.bindingGeneration,
                                                             scriptablePending,
@@ -478,6 +397,17 @@ bool append_roster_notification(
         return false;
     }
 
+    // The leave delta keeps every key in the wire array and clears its presence bit. The client
+    // then deactivates each row while its owner is still valid and unregisters it cleanly.
+    std::size_t retiredGroups = 0;
+    if (peerLeave) {
+        for (std::size_t index = 0; index < snapshot.roster.groupCount; ++index) {
+            snapshot.roster.groups[index].retired = true;
+        }
+        retiredGroups = snapshot.roster.groupCount;
+        snapshot.authOverrides = {};
+        snapshot.senseOverrides = {};
+    }
     // The grant is picked here and committed only once the frame reaches the caller, so a
     // discarded body leaves the bubble ungranted and the next push retries it.
     state::activity::bubble_authority::Grant grant{};
@@ -492,7 +422,7 @@ bool append_roster_notification(
         enteringBubble
             ? static_cast<std::int32_t>(snapshot.region)
             : (pendingRegion >= 0 ? pendingRegion : static_cast<std::int32_t>(snapshot.region));
-    if (!placedRetirementPending
+    if (!peerLeave && !placedRetirementPending
         && state::activity::bubble_authority::select_grant(
             session.activity.session.sessionId,
             grantRegion,
@@ -539,15 +469,13 @@ bool append_roster_notification(
     // An unsolicited body identical to the last delivered one is skipped. A solicited one never
     // is. The repeat check knows only this host's own history, and a slice-set teardown clears
     // the client's mirror without telling us, which is exactly when it asks again.
-    const bool suppressible = encoded && !solicited && !snapshot.hasGrant && !hostStatePending
-                              && !(hasScriptablePending && singleScriptableLink)
-                              && !missionSeedPending && !placedRetirementPending;
+    const bool suppressible = encoded && !solicited && !snapshot.hasGrant && !ownsHostState
+                              && !ownsPending && !missionSeedPending && !placedRetirementPending;
     // Which terms held is in the log line, because a repeat that one of them forced reaches the
     // client as a fresh apply.
     const std::uint8_t forced = static_cast<std::uint8_t>(
         (solicited ? kRosterForceSolicited : 0U) | (snapshot.hasGrant ? kRosterForceGrant : 0U)
-        | (hostStatePending ? kRosterForceHostState : 0U)
-        | (hasScriptablePending && singleScriptableLink ? kRosterForceScriptable : 0U)
+        | (ownsHostState ? kRosterForceHostState : 0U) | (ownsPending ? kRosterForceScriptable : 0U)
         | (missionSeedPending ? kRosterForceMissionSeed : 0U));
     const std::uint64_t bodyHash =
         encoded ? body_hash(std::span(scratch.responseBody).first(messageSize)) : 0;
@@ -605,6 +533,7 @@ bool append_roster_notification(
     encoded =
         encoded
         && build_roster_decode_map(snapshot.roster, session.activity.bindingGeneration, decodeMap);
+    encoded = encoded && stage_roster_device_publications(session, scratch, snapshot);
     if (encoded) {
         middleware::secure_channel::advance_nonce(nonce);
         // The deferred answer is discharged by the body that carries it.
@@ -627,18 +556,22 @@ bool append_roster_notification(
         session.activityRosterStaged.priorRegionBubble = initialRegionBubble;
         session.activityRosterStaged.hostStateRevision = hostState.revision;
         session.activityRosterStaged.hostLifetimeState = snapshot.lifetime;
+        // A link whose body has no participation record never held the spawn, so owes no answer.
+        session.activityRosterStaged.awaitClientSync =
+            snapshot.awaitClientSync && carries_participation(snapshot.roster);
         const MissionSeedLease& missionSeed = session.activityMissionSeed;
         session.activityRosterStaged.missionSeedRevision = missionSeed.revision;
         session.activityRosterStaged.scriptableOverride = scriptablePending;
         session.activityRosterStaged.hasGrant = snapshot.hasGrant;
-        session.activityRosterStaged.hasHostState = hostStatePending;
+        session.activityRosterStaged.hasHostState = ownsHostState;
+        session.activityRosterStaged.peerLeave = peerLeave;
+        // A retired body publishes no seed content, so its revision stays owed.
         session.activityRosterStaged.hasMissionSeedRevision =
-            missionSeed.configured
+            !peerLeave && missionSeed.configured
             && missionSeed.bindingGeneration == session.activity.bindingGeneration
             && missionSeed.revision != missionSeed.publishedRevision
             && !missionSeed.regionArrivalPending;
-        session.activityRosterStaged.hasScriptableOverride =
-            hasScriptablePending && singleScriptableLink;
+        session.activityRosterStaged.hasScriptableOverride = ownsPending;
         session.activityRosterStaged.stateLocalRegion = scriptablePending.target.stateLocalRegion;
         session.activityRosterStaged.activatesSquadOverride = squadPending;
         if (squadPending && scriptablePending.target.stateLocalRoster
@@ -657,6 +590,18 @@ bool append_roster_notification(
         session.activityRosterStaged.staged = true;
         stage_roster_body_record(session, std::span(scratch.responseBody).first(messageSize));
     }
+    if (encoded && peerLeave) {
+        std::array<char, core::log::kLineCapacity> line{};
+        const int length = std::snprintf(line.data(),
+                                         line.size(),
+                                         "ev=activity stage=peer_leave result=answered groups=%zu",
+                                         retiredGroups);
+        if (length > 0) {
+            core::log::write(core::log::Channel::server,
+                             core::log::Level::info,
+                             {line.data(), static_cast<std::size_t>(length)});
+        }
+    }
     report_roster_push(session,
                        snapshot,
                        name,
@@ -667,7 +612,7 @@ bool append_roster_notification(
                        forced);
     SecureZeroMemory(scratch.responseBody.data(), messageSize);
     if (!encoded) {
-        if (hostStatePending) {
+        if (ownsHostState) {
             server::activity::host::note_auth_attempt(
                 session.activity.session,
                 session.activity.bindingGeneration,
@@ -675,7 +620,7 @@ bool append_roster_notification(
                 hostState.lifetimeState,
                 server::activity::host::OutputStatus::frameRefused);
         }
-        if (hasScriptablePending && singleScriptableLink) {
+        if (ownsPending) {
             server::activity::host::note_scriptable_attempt(
                 session.activity.session,
                 session.activity.bindingGeneration,
@@ -722,6 +667,36 @@ bool begin_staged_roster_publication(
                    lease));
 }
 
+namespace {
+
+/** Tells the mission surface that the arrival answer reached the client, which spawns on it. */
+void note_client_entered(const Session& session) noexcept {
+    server::activity::host::ClientStateChangeInput input{};
+    input.binding = session.activity.session;
+    input.state.heldRegion =
+        state::activity::membership::player_region(session.activity.session.sessionId);
+    input.state.activityStateRevision = state::activity::membership::state_revision();
+    input.state.entered = true;
+    input.state.committed = true;
+    input.sourceGeneration = session.activity.bindingGeneration;
+    // Only Sense observations read the sequence; the arrival answer has no client message.
+    input.clientMessageSequence = input.state.activityStateRevision;
+    const bool queued = server::activity::host::submit_client_state_change(input);
+    std::array<char, 96> line{};
+    const int written = std::snprintf(line.data(),
+                                      line.size(),
+                                      "ev=activity stage=client_entered result=%s region=%d",
+                                      queued ? "ok" : "refused",
+                                      input.state.heldRegion);
+    if (written > 0) {
+        core::log::write(core::log::Channel::server,
+                         queued ? core::log::Level::info : core::log::Level::warn,
+                         {line.data(), static_cast<std::size_t>(written)});
+    }
+}
+
+} // namespace
+
 /** Settles a staged roster body that reached the caller. */
 void commit_staged_roster(Session& session) noexcept {
     if (!session.activityRosterStaged.staged) {
@@ -736,6 +711,14 @@ void commit_staged_roster(Session& session) noexcept {
     // The BAP lock serializes publication and incoming activity messages, so replacing the whole
     // fixed map here exposes either the prior delivered roster or this complete delivered roster.
     session.activityRosterDecode = session.activityRosterStaged.decodeMap;
+    if (!session.activityRosterStaged.peerLeave) {
+        const bool answeredArrival =
+            session.activityRosterAwaitClientSync && !session.activityRosterStaged.awaitClientSync;
+        session.activityRosterAwaitClientSync = session.activityRosterStaged.awaitClientSync;
+        if (answeredArrival) {
+            note_client_entered(session);
+        }
+    }
     if (session.activityRosterStaged.entityRetirement.pending) {
         server::gameplay::squad_entity_retirement::commit_retirement(
             session.activityRosterStaged.entityRetirement);
@@ -798,6 +781,10 @@ void commit_staged_roster(Session& session) noexcept {
             session.activity.bindingGeneration,
             session.activityRosterStaged.scriptableOverride,
             server::activity::host::OutputStatus::noOverrideTarget);
+    }
+    commit_roster_device_publications(session);
+    if (session.activityRosterStaged.peerLeave) {
+        session.activityLeftGeneration = session.activity.bindingGeneration;
     }
     session.activityRosterStaged = {};
 }

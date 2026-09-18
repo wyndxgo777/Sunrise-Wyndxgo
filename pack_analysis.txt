@@ -1,0 +1,5 @@
+﻿count=8627 entrySize=12 indexStart=16 indexEnd=103540
+e0Hash=103536 e0Off=5685 e0Size=720857
+idxEnd=103540 bytesAtIdxEnd=00-10-4A-46-49-46-00-01
+pos=109225 bytesAtPos=00-10-4A-46-49-46-00-01
+fileSize=47005335

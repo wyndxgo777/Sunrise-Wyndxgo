@@ -1,4 +1,5 @@
 #include "auth_schema_catalog.h"
+#include "map_generator_auth.h"
 #include "sensor_auth_update.h"
 
 namespace sunrise::middleware::bap::activity_message::sensor_auth_update {
@@ -47,7 +48,7 @@ constexpr std::uint32_t kActivityAllowsFireteamJoin = 1;
  * Two 475-bit records, a u32, then fixed arrays of 32 and 64 u8. The fixed array lengths apply
  * even with both dynamic arrays empty; counting one byte each truncates the body by 752 bits.
  */
-constexpr std::size_t kMapGeneratorBits = 2 * 475 + 32 + 32 * 8 + 64 * 8;
+constexpr std::size_t kMapGeneratorBits = map_generator_auth::kBitCount;
 /**
  * Player-monitor body, schema `0x80809532`: a slot reference then a biased i32.
  * Fixed width: no presence bit and no array, so there is exactly one legal length.
@@ -121,6 +122,7 @@ constexpr std::size_t kSpawnKeyCount = 32;
     }
     // The participation record is this body's head, so struct +8 and +10 are record +8 and +10.
     // Record +8 is step 36 task 9's own term and +10 is the spawn gate's.
+    // Record +56, the team index, 5 bits at bias 1, must equal the membership blob's team byte.
     return encoded && writer.write(0, kPresenceWidth) && writer.write(1, kPresenceWidth)
            && writer.write(1, kPresenceWidth) && writer.write(1, kPresenceWidth)
            && writer.write(0, kPresenceWidth) && writer.write(1, 3) && writer.write(1, 2)
@@ -313,8 +315,7 @@ bool write_auth_body(bits::Writer& writer,
         encoded = writer.write(0, 32) && writer.write(kPlayerMonitorSelectorZero, 7)
                   && writer.write(kUnsignedShortZero, 16) && writer.write(kSignedZero, 32);
     } else if (slotType == kSlotTypeMapGenerator) {
-        // Zero element counts declare two empty arrays; every other field is unbiased.
-        encoded = pad_bits(writer, kMapGeneratorBits);
+        encoded = map_generator_auth::write_body(writer, {});
     }
     return encoded && writer.bit_count() == start + expected;
 }

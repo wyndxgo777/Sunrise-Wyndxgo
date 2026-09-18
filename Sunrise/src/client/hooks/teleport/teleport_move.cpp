@@ -576,18 +576,6 @@ bool read_position(void* component, Vector& position) noexcept {
     return body != nullptr && read_at(body + kBodyPositionX, position);
 }
 
-/** Writes the world position of the body a physics component drives. */
-bool write_position(void* component, const Vector& position) noexcept {
-
-    if (component == nullptr) {
-        return false;
-    }
-
-    std::byte* const body = body_of(static_cast<std::byte*>(component));
-
-    return body != nullptr && write_vector(body + kBodyPositionX, position);
-}
-
 /** Reads the linear velocity of the body a physics component drives. */
 bool read_velocity(void* component, Vector& velocity) noexcept {
 
@@ -598,6 +586,11 @@ bool read_velocity(void* component, Vector& velocity) noexcept {
     std::byte* const body = body_of(static_cast<std::byte*>(component));
 
     return body != nullptr && read_at(body + kBodyVelocityX, velocity);
+}
+
+/** Finds the rigid body a physics component drives. */
+void* body(void* component) noexcept {
+    return component != nullptr ? body_of(static_cast<std::byte*>(component)) : nullptr;
 }
 
 /** Writes the linear velocity of the body a physics component drives. */

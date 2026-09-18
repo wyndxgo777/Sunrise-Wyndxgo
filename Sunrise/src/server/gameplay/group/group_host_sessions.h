@@ -56,7 +56,7 @@ struct HostSessionRow {
  * authored public rows reuse compatible destination content across private launches.
  * An unknown region never claims a row. A conflicting referenced row is never replaced.
  * @param groupSessionId Group session carried by the matching join descriptor.
- * @param source Exact source activity whose destination the target must copy.
+ * @param source Exact source activity. A public region's target runs its free-roam activity.
  * @param regionIndex Concrete advertised region.
  * @param output Cleared, then receives the pending or ready row generation.
  * @param publicRegion True only when the installed destination authors this region as public.

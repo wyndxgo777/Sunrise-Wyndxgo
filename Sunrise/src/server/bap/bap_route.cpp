@@ -44,6 +44,9 @@ Scratch g_scratch{};
 
 /** Client-owned investment effects. Empty until the Client registers, and after it shuts down. */
 std::atomic<InvestmentPublicationConsumer> g_investmentPublicationConsumer{};
+
+/** Client-owned refresh slice request. Empty until the Client registers, and after it shuts down.
+ */
 std::atomic<InvestmentSliceConsumer> g_investmentSliceConsumer{};
 
 /** Lifetime of the native item-acquisition flyout, which the hold must outlast. */
@@ -408,6 +411,20 @@ void notify_investment_publication() noexcept {
     if (consumer != nullptr) {
         consumer();
     }
+}
+
+/** Takes the slice consumer slot, or refuses a second registration. */
+bool register_client_investment_slice_consumer(InvestmentSliceConsumer slice) noexcept {
+    if (slice == nullptr || g_investmentSliceConsumer.load(std::memory_order_acquire) != nullptr) {
+        return false;
+    }
+    g_investmentSliceConsumer.store(slice, std::memory_order_release);
+    return true;
+}
+
+/** Releases the slice consumer slot. */
+void unregister_client_investment_slice_consumer() noexcept {
+    g_investmentSliceConsumer.store(nullptr, std::memory_order_release);
 }
 
 void request_investment_slice() noexcept {

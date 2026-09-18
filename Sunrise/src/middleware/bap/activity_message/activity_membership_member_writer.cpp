@@ -30,8 +30,9 @@ constexpr std::int32_t kLegStateBias = 1;
 constexpr std::uint8_t kLeaveReasonWire = 1;
 /** The nested identity block has presence bits on fields 0 through 14. */
 constexpr std::size_t kIdentityPresenceFieldCount = 15;
-/** The player blob includes the native partition field and three zero tail pad bits. */
+/** The nested player blob is 19 bytes: 149 field bits and three zero pad bits. */
 constexpr std::uint16_t kPlayerBlobByteCount = 19;
+constexpr std::uint8_t kPlayerBlobPadBits = 3;
 /** Native A.P2 uses a six-bit value at bias one; free-roam partition zero is wire one. */
 constexpr std::uint8_t kPlayerPartitionWire = 1;
 /** The remote member's player-state field zero carries the native-view gate. */
@@ -110,7 +111,8 @@ template <std::size_t Size>
     return writer.write(1, 3) && writer.write(0, 1) && name() && writer.write(1, 1)
            && writer.write(kPlayerPartitionWire, 6) && writer.write(0, 2) && name()
            && writer.write(0, 5) && writer.write(1, 1) && writer.write(identity.accountSoid, 64)
-           && writer.write(identity.field5, 64) && writer.write(0, 3);
+           && writer.write(identity.field5, 64) && writer.write(0, kPlayerBlobPadBits);
+}
 }
 
 /**

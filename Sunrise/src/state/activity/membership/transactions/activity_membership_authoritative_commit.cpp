@@ -17,6 +17,7 @@ bool commit_authoritative(ActivityState& state,
     // between prepare and commit, and refusing on that difference dropped the whole delta: no
     // revision advanced and the region never moved.
     const MembershipState before = member;
+    clientState.previousRegion = before.currentRegion.index;
     MembershipState merged = merge(before, prepared.authoritativeInput);
     const bool changed = !equal_authoritative(member, merged);
     const bool movesRegion = moves_region(member, merged);
@@ -41,6 +42,11 @@ bool commit_authoritative(ActivityState& state,
         ++merged.revision;
         merged.acknowledgedRevision = kAbsentRevision;
     }
+    // A report that the client holds no slice set is the teardown before a load, so the write-back
+    // it sent describes a world it has left. The next load reports its own.
+    if (merged.currentRegion.index < 0) {
+        merged.clientInWorld = false;
+    }
     // The host teleport's spawn step and its retirement are part of the merge, so the staged
     // answer to the report already carries them.
     member = merged;
@@ -51,7 +57,7 @@ bool commit_authoritative(ActivityState& state,
     clientState.activityStateRevision = state.stateRevision;
     clientState.membershipRevision = member.revision;
     clientState.teleportSliceSetIndex = member.teleport.sliceSetIndex;
-    clientState.teleportSliceSetHash = member.teleport.sliceSetHash;
+    clientState.teleportSliceSetHash = member.teleport.spawnSetHash;
     clientState.spawnState = member.spawn.state;
     clientState.teleportState = member.teleport.state;
     clientState.hasRegion = movesRegion && member.region.index >= 0;
@@ -60,7 +66,7 @@ bool commit_authoritative(ActivityState& state,
     clientState.hasSpawn = before.spawn.state != member.spawn.state;
     clientState.hasTeleport = before.teleport.state != member.teleport.state
                               || before.teleport.sliceSetIndex != member.teleport.sliceSetIndex
-                              || before.teleport.sliceSetHash != member.teleport.sliceSetHash;
+                              || before.teleport.spawnSetHash != member.teleport.spawnSetHash;
     clientState.changed = clientState.hasRegion || clientState.hasCurrentRegion
                           || clientState.hasSpawn || clientState.hasTeleport;
     clientState.committed = true;
